@@ -21,8 +21,18 @@ include 'madeline.php';
 //include 'vendor/autoload.php';
 
 //\danog\MadelineProto\Magic::classExists();
-$settings = []; // = ['logger' => ['logger' => \danog\MadelineProto\Logger::FILE_LOGGER, 'logger-param' => 'MadelineProto.log']];
+//$settings = ['logger' => ['logger' => \danog\MadelineProto\Logger::FILE_LOGGER, 'logger-param' => 'MadelineProto.log']];
 //\danog\MadelineProto\Logger::getLoggerFromSettings($settings);
+$settings['connection']['main'] = [
+    'ipv4' => [ // ipv4 addresses
+        2 => [ // The rest will be fetched automatically
+            'ip_address' => '149.154.167.50',
+            'port' => 443,
+            'media_only' => false,
+            'tcpo_only' => false,
+        ],
+    ],
+];
 
 $mp = new \danog\MadelineProto\API('madeline.madeline', $settings);
 $mp->updateSettings($settings);
