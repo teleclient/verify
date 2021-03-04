@@ -8,27 +8,23 @@
  */
 
 declare(strict_types=1);
-define('SCRIPT_INFO', 'VERIFY V1.0.0'); // <== Do not change!
+define('SCRIPT_INFO', 'VERIFY V1.0.1'); // <== Do not change!
 
 use \danog\MadelineProto\API;
 use \danog\MadelineProto\Logger;
 use \danog\MadelineProto\Shutdown;
+use \danog\MadelineProto\Magic;
 
 error_reporting(E_ALL);
 ini_set('ignore_repeated_errors', '1');
 ini_set('display_startup_errors', '1');
-ini_set('display_errors',         '1');
+ini_set('display_errors',         '0');
 ini_set('log_errors',             '1');
 ini_set('error_log',              'MadelineProto.log');
 
 includeMadeline('phar');
 
-$sessions = findSessions();
-if (count($sessions) !== 1) {
-    suffocateRobot('No session file or more than one!');
-}
-
-$session  = $sessions[0];
+$session  = temporarySession();
 $settings = [
     'logger' => [
         'logger'       => Logger::CALLABLE_LOGGER,
@@ -37,7 +33,6 @@ $settings = [
     ]
 ];
 $mp = new API($session, $settings);
-Shutdown::removeCallback('restarter');
 if ($mp->API->authorized === 3 && !$mp->hasAllAuth()) {
     suffocateRobot('The Logged-in account might have been deleted!');
 }
@@ -45,11 +40,13 @@ $mp->async(true);
 $mp->loop(function () use ($mp) {
     yield $mp->start();
 });
-suffocateRobot('Everythin is hunky-dory!');
+suffocateRobot('Everything is hunky-dory!');
 
 function filter($entry, int $level): void
 {
-    if (\is_string($entry) && strpos($entry, 'Could not resend req_pq_multi') !== false) {
+    $entry = is_array($entry) ? toJSON($entry) : $entry;
+    if (\is_string($entry) && strpos($entry, 'Could not resend ') !== false) {
+        error_log((string)$entry);
         suffocateRobot('Session is bad!');
     }
 }
@@ -63,23 +60,59 @@ function suffocateRobot(string $message = 'Everything is OK!'): void
     \header('Content-Type: text/html');
     echo $buffer;
     \flush();
+    if (file_exists('madeline.madeline.tmp')) {
+        unlink('madeline.madeline.tmp');
+    }
+    if (file_exists('madeline.madeline.tmp.lock')) {
+        unlink('madeline.madeline.tmp.lock');
+    }
     Shutdown::removeCallback('restarter');
     Shutdown::removeCallback(0);
     Shutdown::removeCallback(1);
     Shutdown::removeCallback(2);
-    exit(1);
+    ini_set('log_errors', '0');
+    Magic::$signaled = true;
+    if (\defined(STDIN::class)) {
+        \Amp\ByteStream\getStdin()->unreference();
+    }
+    \Amp\ByteStream\getInputBufferStream()->unreference();
+    $driver = \Amp\Loop::get();
+    $reflectionClass = new ReflectionClass(\Amp\Loop\Driver::class);
+    $reflectionProperty = $reflectionClass->getProperty('watchers');
+    $reflectionProperty->setAccessible(true);
+    foreach (\array_keys($reflectionProperty->getValue($driver)) as $key) {
+        try {
+            $driver->unreference($key);
+        } catch (Throwable $e) {
+        }
+    }
+    \Amp\Loop::stop();
+    die();
 }
 
-function findSessions(): array
+function temporarySession(): string
 {
     $sessions = [];
     foreach (glob('*.*.lock') as $file) {
         $file = substr($file, 0, strlen($file) - 5);
-        if (file_exists($file)) {
+        $tmp = substr($file, -4) === '.tmp';
+        if (!$tmp && file_exists($file)) {
             $sessions[] = $file;
         }
     }
-    return $sessions;
+    if (count($sessions) === 0) {
+        suffocateRobot('No session file founc!');
+    } elseif (count($sessions) > 1) {
+        foreach ($sessions as $session) {
+            echo ("$session <br>" . PHP_EOL);
+        }
+        suffocateRobot('There are more than one session files!');
+    }
+    $session = $sessions[0];
+    $tmpsess = $session . '.tmp';
+    \copy($session, $tmpsess);
+
+    return $tmpsess;
 }
 
 function includeMadeline(string $source = 'phar', string $param = '')
@@ -97,4 +130,15 @@ function includeMadeline(string $source = 'phar', string $param = '')
         default:
             throw new \ErrorException("Invalid argument: '$source'");
     }
+}
+
+function toJSON($var, bool $pretty = true): ?string
+{
+    if (isset($var['request'])) {
+        unset($var['request']);
+    }
+    $opts = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+    $json = \json_encode($var, $opts | ($pretty ? JSON_PRETTY_PRINT : 0));
+    $json = ($json !== '') ? $json : var_export($var, true);
+    return ($json != false) ? $json : null;
 }

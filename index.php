@@ -1,53 +1,24 @@
 <?php
 
-declare(strict_types=1);
-
-\date_default_timezone_set('UTC');
-\ignore_user_abort(true);
-\set_time_limit(0);
-\error_reporting(E_ALL);
-ini_set('ignore_repeated_errors', '1');
-ini_set('display_startup_errors', '1');
-ini_set('display_errors',         '1');
-ini_set('default_charset',        'UTF-8');
-ini_set('precision',              '18');
-ini_set('log_errors',             '1');
-ini_set('error_log',              'MadelineProto.log');
-
 if (!file_exists('madeline.php')) {
     copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
 }
 include 'madeline.php';
-//include 'vendor/autoload.php';
 
-//\danog\MadelineProto\Magic::classExists();
-//$settings = ['logger' => ['logger' => \danog\MadelineProto\Logger::FILE_LOGGER, 'logger-param' => 'MadelineProto.log']];
-//\danog\MadelineProto\Logger::getLoggerFromSettings($settings);
-$settings['connection']['main'] = [
-    'ipv4' => [ // ipv4 addresses
-        2 => [ // The rest will be fetched automatically
-            'ip_address' => '149.154.167.50',
-            'port' => 443,
-            'media_only' => false,
-            'tcpo_only' => false,
-        ],
-    ],
-];
-
-$mp = new \danog\MadelineProto\API('madeline.madeline', $settings);
-$mp->updateSettings($settings);
+$mp = new \danog\MadelineProto\API('madeline.madeline');
 $mp->async(true);
 $mp->loop(function () use ($mp) {
     yield $mp->start();
-    yield processMessages($mp, '@blablabber', function ($message) use ($mp) {
-
-        yield $mp->echo("id: " . $message['id'] . " message: " . @$message['message'] . " <br>\n"); // <= put your code here
-
+    yield processMessages($mp, '@webwarp', function ($message) use ($mp): Generator {
+        // Begin your code
+        yield $mp->echo("id: " . $message['id'] . " message: " . @$message['message'] . " <br>\n");
+        // End your code
     });
 });
-echo ('Bye, bye!');
+echo ('Bye, bye! <br>' . PHP_EOL);
 
-function processMessages($mp, $channel, callable $callback, int $limit = 100, int $pause = 5): Generator
+
+function processMessages($mp, $channel, callable $callback, int $limit = 100, int $pause = 1): Generator
 {
     $offsetId = 0;
     do {
@@ -62,12 +33,13 @@ function processMessages($mp, $channel, callable $callback, int $limit = 100, in
             'hash'        => 0
         ]);
 
-        if (count($messages['messages']) == 0) {
+        $mp->logger("Message Count: " . count($messages['messages']));
+        if (count($messages['messages']) === 0) {
             break;
         }
 
         foreach ($messages['messages'] as $message) {
-            $callback($message);
+            yield $callback($message);
         }
 
         $offsetId = end($messages['messages'])['id'];
