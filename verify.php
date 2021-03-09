@@ -22,7 +22,7 @@ ini_set('display_errors',         '0');
 ini_set('log_errors',             '1');
 ini_set('error_log',              'MadelineProto.log');
 
-includeMadeline('phar');
+includeMadeline('composer');
 
 $session  = temporarySession();
 $settings = [
@@ -30,6 +30,9 @@ $settings = [
         'logger'       => Logger::CALLABLE_LOGGER,
         'logger_param' => 'filter',
         'logger_level' => Logger::ULTRA_VERBOSE,
+    ],
+    'max_tries' => [
+        'authorization' => 3
     ]
 ];
 $mp = new API($session, $settings);
@@ -42,24 +45,30 @@ $mp->loop(function () use ($mp) {
 });
 suffocateRobot('Everything is hunky-dory!');
 
+// Functions
+
 function filter($entry, int $level): void
 {
-    $entry = is_array($entry) ? toJSON($entry) : $entry;
     if (\is_string($entry) && strpos($entry, 'Could not resend ') !== false) {
-        error_log((string)$entry);
+        $procedure = substr($entry, 17);
+        error_log("procedure: '$procedure', message: $entry");
         suffocateRobot('Session is bad!');
     }
 }
 
 function suffocateRobot(string $message = 'Everything is OK!'): void
 {
-    $buffer = @\ob_get_clean() ?: '';
-    $buffer .= '<html><body><h1>' . \htmlentities($message) . '</h1></body></html>';
-    \ignore_user_abort(true);
-    \header('Connection: close');
-    \header('Content-Type: text/html');
-    echo $buffer;
-    \flush();
+    if (PHP_SAPI === 'cli') {
+        echo ($message . PHP_EOL);
+    } else {
+        $buffer = @\ob_get_clean() ?: '';
+        $buffer .= '<html><body><h1>' . \htmlentities($message) . '</h1></body></html>';
+        \ignore_user_abort(true);
+        \header('Connection: close');
+        \header('Content-Type: text/html');
+        echo $buffer;
+        \flush();
+    }
     if (file_exists('madeline.madeline.tmp')) {
         unlink('madeline.madeline.tmp');
     }
@@ -70,7 +79,7 @@ function suffocateRobot(string $message = 'Everything is OK!'): void
     Shutdown::removeCallback(0);
     Shutdown::removeCallback(1);
     Shutdown::removeCallback(2);
-    ini_set('log_errors', '0');
+    //ini_set('log_errors', '0');
     Magic::$signaled = true;
     if (\defined(STDIN::class)) {
         \Amp\ByteStream\getStdin()->unreference();

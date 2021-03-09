@@ -1,9 +1,6 @@
 <?php
 
-if (!file_exists('madeline.php')) {
-    copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
-}
-include 'madeline.php';
+includeMadeline('composer');
 
 $mp = new \danog\MadelineProto\API('madeline.madeline');
 $mp->async(true);
@@ -45,4 +42,21 @@ function processMessages($mp, $channel, callable $callback, int $limit = 100, in
         $offsetId = end($messages['messages'])['id'];
         yield $mp->sleep($pause);
     } while (true);
+}
+
+function includeMadeline(string $source = 'phar', string $param = '')
+{
+    switch ($source) {
+        case 'phar':
+            if (!\file_exists('madeline.php')) {
+                \copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+            }
+            include 'madeline.php';
+            break;
+        case 'composer':
+            include 'vendor/autoload.php';
+            break;
+        default:
+            throw new \ErrorException("Invalid argument: '$source'");
+    }
 }
