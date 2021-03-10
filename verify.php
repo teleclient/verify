@@ -22,7 +22,7 @@ ini_set('display_errors',         '0');
 ini_set('log_errors',             '1');
 ini_set('error_log',              'MadelineProto.log');
 
-includeMadeline('composer');
+includeMadeline('composer', '../composer/mp5');
 
 $session  = temporarySession();
 $settings = [
@@ -124,17 +124,21 @@ function temporarySession(): string
     return $tmpsess;
 }
 
-function includeMadeline(string $source = 'phar', string $param = '')
+function includeMadeline(string $source = 'phar', string $param = null)
 {
     switch ($source) {
         case 'phar':
             if (!\file_exists('madeline.php')) {
                 \copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
             }
+            if ($param) {
+                define('MADELINE_BRANCH', $param);
+            }
             include 'madeline.php';
             break;
         case 'composer':
-            include 'vendor/autoload.php';
+            $prefix = !$param ? '' : ($param . '/');
+            include $prefix . 'vendor/autoload.php';
             break;
         default:
             throw new \ErrorException("Invalid argument: '$source'");
